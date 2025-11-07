@@ -71,15 +71,39 @@ autocmd BufRead,BufNewFile *.yaml,*.yml setlocal shiftwidth=2 tabstop=2 softtabs
 set foldlevel=99
 nnoremap <leader>F :exec foldclosed('.') == -1 ? 'normal! zM' : 'normal!
 
-if has('win32') || has('win64')
+let g:is_wsl = has('unix') && (system('uname -r') =~? 'microsoft')
+
+if g:is_wsl
     inoremap <C-v> <C-r>+
-    vnoremap <C-Y> :silent! w !clip.exe<CR>
+    vnoremap <C-Y> :silent w !clip.exe<CR>
 endif
 
 command! -range -nargs=0 Strikethrough call s:CombineSelection(<line1>,<line2>,'0336')
 
-function! s:CombineSelection(line1, line2, cp)
-    execute 'let char = "\u'.a:cp.'"'
-    execute a:line1.','.a.line2.'s/\%V[^[:cntrl:]]/$'.char.'/ge'
-endfunction
+function! s:CombineSelection(line1, line2, cp) range
+    let l:start = getpos("'<")
+    let l:end = getpos("'>")
+    if l:start[1] == 0 || l:end[1] == 0
+        return
+    endif
 
+    let l:char = nr2char(str2nr(a:cp, 16))
+    for lnum in range(a:line1, a:line2)
+        let l:line = getline(lnum)
+
+        let l:start_col = lnum == l:start[1] ? l:start[2] : 1
+        let l:end_col = lnum == l:end[1] ? l:end[2] : strlen(l:line)
+        if l:end_col < l:start_col
+            continue
+        endif
+
+        let l:start_idx = l:start_col - 1
+        let l:len = l:end_col - l:start_col + 1
+        let l:prefix = strpart(l:line, 0, l:start_idx)
+        let l:middle = strpart(l:line, l:start_idx, l:len)
+        let l:suffix = strpart(l:line, l:start_idx + l:len)
+        let l:middle_chars = split(l:middle, '\zs')
+        let l:new_middle = join(map(l:middle_chars, 'v:val . l:char'), '')
+        call setline(lnum, l:prefix . l:new_middle . l:suffix)
+    endfor
+endfunction
