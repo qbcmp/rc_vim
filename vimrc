@@ -73,6 +73,7 @@ autocmd BufRead,BufNewFile *.yaml,*.yml setlocal shiftwidth=2 tabstop=2 softtabs
 autocmd FileType yaml,yml call s:SetupYamlFolds()
 set foldlevel=99
 set foldtext=<SID>FoldText()
+set statusline=%f\ %h%m%r%=%{StatuslineBranch()}\ %l,%c
 nnoremap <leader>F :exec foldclosed('.') == -1 ? 'normal! zM' : 'normal!
 
 let g:is_wsl = has('unix') && (system('uname -r') =~? 'microsoft')
@@ -83,6 +84,10 @@ if g:is_wsl
 endif
 
 command! -range -nargs=0 Strikethrough call s:CombineSelection(<line1>,<line2>,'0336')
+augroup StatuslineGitBranch
+    autocmd!
+    autocmd BufEnter,BufWritePost,DirChanged,FocusGained * call s:UpdateStatuslineBranch()
+augroup END
 
 function! s:CombineSelection(line1, line2, cp) range
     let l:start = getpos("'<")
@@ -113,28 +118,16 @@ function! s:CombineSelection(line1, line2, cp) range
 endfunction
 
 function! s:GetVisualSelection() abort
-    let l:start = getpos("'<")
-    let l:end = getpos("'>")
-    if l:start[1] == 0 || l:end[1] == 0
+    if getpos("'<")[1] == 0 || getpos("'>")[1] == 0
         return ''
     endif
-    if l:start[1] > l:end[1] || (l:start[1] == l:end[1] && l:start[2] > l:end[2])
-        let l:tmp = l:start
-        let l:start = l:end
-        let l:end = l:tmp
-    endif
-    let l:lines = getline(l:start[1], l:end[1])
-    if empty(l:lines)
-        return ''
-    endif
-    let l:lines[0] = strpart(l:lines[0], max([l:start[2] - 1, 0]))
-    let l:last = len(l:lines) - 1
-    let l:end_col = l:end[2]
-    if l:end_col <= 0 || l:end_col > strlen(l:lines[l:last])
-        let l:end_col = strlen(l:lines[l:last])
-    endif
-    let l:lines[l:last] = strpart(l:lines[l:last], 0, l:end_col)
-    return join(l:lines, "\n")
+    let l:save_reg = getreg('"')
+    let l:save_type = getregtype('"')
+    silent! execute 'normal! gv"zy'
+    let l:selection = getreg('z')
+    call setreg('"', l:save_reg, l:save_type)
+    call setreg('z', '')
+    return l:selection
 endfunction
 
 function! s:ReplaceSelection() abort
@@ -187,6 +180,33 @@ function! s:FoldText() abort
     endif
     return l:indent . '▸ ' . l:text
 endfunction
+
+function! s:UpdateStatuslineBranch() abort
+    let l:dir = expand('%:p:h')
+    if empty(l:dir)
+        let l:dir = getcwd()
+    endif
+    let l:git_root = finddir('.git', l:dir . ';')
+    if empty(l:git_root)
+        let b:git_branch = ''
+        return
+    endif
+
+    let l:worktree = fnamemodify(l:git_root, ':h')
+    let l:cmd = 'git -C ' . shellescape(l:worktree) . ' rev-parse --abbrev-ref HEAD'
+    let l:result = systemlist(l:cmd)
+    if v:shell_error != 0 || empty(l:result)
+        let b:git_branch = ''
+        return
+    endif
+    let b:git_branch = '[' . l:result[0] . ']'
+endfunction
+
+function! StatuslineBranch() abort
+    return get(b:, 'git_branch', '')
+endfunction
+
+call s:UpdateStatuslineBranch()
 
 function! s:SetupYamlFolds() abort
     setlocal foldmethod=expr
