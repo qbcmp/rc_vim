@@ -54,13 +54,14 @@ nmap m :m -2<CR>
 
 nnoremap <leader>c :execute &colorcolumn == '' ? 'set colorcolumn=80' : 'set colorcolumn='<CR>
 
-set fillchars=eob:\
-set fillchars=fold:\
-set fillchars+=vert:┃
+set fillchars=eob:\ ,fold:\ ,vert:┃
+set foldcolumn=0
 autocmd FileType netrw highlight CursorLine ctermfg=white ctermbg=238
 autocmd FileType netrw setlocal noruler noshowmode
 autocmd FileType netrw let &l:statusline = '%{exists("b:netrw_curdir") ? fnamemodify(b:netrw_curdir, ":~") : ""}'
 hi netrwTreeBar ctermfg=black
+highlight! link Folded Normal
+highlight! link FoldColumn Normal
 
 let g:netrw_keepdir = 0
 let g:netrw_winsize = 30
@@ -68,7 +69,9 @@ let g:netrw_banner = 0
 let g:netrw_liststyle = 3
 
 autocmd BufRead,BufNewFile *.yaml,*.yml setlocal shiftwidth=2 tabstop=2 softtabstop=2 expandtab
+autocmd FileType yaml,yml call s:SetupYamlFolds()
 set foldlevel=99
+set foldtext=<SID>FoldText()
 nnoremap <leader>F :exec foldclosed('.') == -1 ? 'normal! zM' : 'normal!
 
 let g:is_wsl = has('unix') && (system('uname -r') =~? 'microsoft')
@@ -106,4 +109,66 @@ function! s:CombineSelection(line1, line2, cp) range
         let l:new_middle = join(map(l:middle_chars, 'v:val . l:char'), '')
         call setline(lnum, l:prefix . l:new_middle . l:suffix)
     endfor
+endfunction
+
+function! s:FoldText() abort
+    let l:line = getline(v:foldstart)
+    let l:indent = matchstr(l:line, '^\s*')
+    let l:text = substitute(l:line, '^\s*', '', '')
+    if empty(l:text)
+        let l:next = nextnonblank(v:foldstart + 1)
+        if l:next > 0
+            let l:text = substitute(getline(l:next), '^\s*', '', '')
+        endif
+    endif
+    return l:indent . '▸ ' . l:text
+endfunction
+
+function! s:SetupYamlFolds() abort
+    setlocal foldmethod=expr
+    setlocal foldexpr=s:YamlFoldExpr(v:lnum)
+    setlocal foldenable
+    setlocal foldlevel=99
+endfunction
+
+function! s:YamlFoldExpr(lnum) abort
+    let l:line = getline(a:lnum)
+    if l:line =~# '^\s*$' || l:line =~# '^\s*#'
+        return -1
+    endif
+
+    let l:curr = s:YamlIndentLevel(a:lnum)
+    let l:next = s:YamlNextIndentLevel(a:lnum)
+
+    if l:next > l:curr
+        return 'a' . (l:next - l:curr)
+    elseif l:next < l:curr
+        return 's' . (l:curr - l:next)
+    elseif l:curr == 0
+        return 0
+    else
+        return '='
+    endif
+endfunction
+
+function! s:YamlIndentWidth() abort
+    return &shiftwidth > 0 ? &shiftwidth : (&tabstop > 0 ? &tabstop : 2)
+endfunction
+
+function! s:YamlIndentLevel(lnum) abort
+    return indent(a:lnum) / s:YamlIndentWidth()
+endfunction
+
+function! s:YamlNextIndentLevel(lnum) abort
+    let l:line_count = line('$')
+    let l:idx = a:lnum + 1
+    while l:idx <= l:line_count
+        let l:text = getline(l:idx)
+        if l:text =~# '^\s*$' || l:text =~# '^\s*#'
+            let l:idx += 1
+            continue
+        endif
+        return s:YamlIndentLevel(l:idx)
+    endwhile
+    return 0
 endfunction
