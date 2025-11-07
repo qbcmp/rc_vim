@@ -49,6 +49,7 @@ map <leader>w :set wrap!<CR>
 map <leader>d :bd<CR>
 map <leader>b :bn<CR>
 map <leader>s :Strikethrough<CR>
+xnoremap <silent> <leader>r :<C-U>call <SID>ReplaceSelection()<CR>
 nmap n :m +1<CR>
 nmap m :m -2<CR>
 
@@ -109,6 +110,69 @@ function! s:CombineSelection(line1, line2, cp) range
         let l:new_middle = join(map(l:middle_chars, 'v:val . l:char'), '')
         call setline(lnum, l:prefix . l:new_middle . l:suffix)
     endfor
+endfunction
+
+function! s:GetVisualSelection() abort
+    let l:start = getpos("'<")
+    let l:end = getpos("'>")
+    if l:start[1] == 0 || l:end[1] == 0
+        return ''
+    endif
+    if l:start[1] > l:end[1] || (l:start[1] == l:end[1] && l:start[2] > l:end[2])
+        let l:tmp = l:start
+        let l:start = l:end
+        let l:end = l:tmp
+    endif
+    let l:lines = getline(l:start[1], l:end[1])
+    if empty(l:lines)
+        return ''
+    endif
+    let l:lines[0] = strpart(l:lines[0], max([l:start[2] - 1, 0]))
+    let l:last = len(l:lines) - 1
+    let l:end_col = l:end[2]
+    if l:end_col <= 0 || l:end_col > strlen(l:lines[l:last])
+        let l:end_col = strlen(l:lines[l:last])
+    endif
+    let l:lines[l:last] = strpart(l:lines[l:last], 0, l:end_col)
+    return join(l:lines, "\n")
+endfunction
+
+function! s:ReplaceSelection() abort
+    let l:selection = s:GetVisualSelection()
+    if empty(l:selection)
+        echo 'Nothing selected to replace'
+        return
+    endif
+
+    let l:prompt = 'Replace selection with: '
+    let l:replacement = ''
+    let l:cancelled = 0
+    call inputsave()
+    try
+        let l:replacement = input(l:prompt, l:selection)
+    catch /^Vim:Interrupt$/
+        let l:cancelled = 1
+    finally
+        call inputrestore()
+    endtry
+    if l:cancelled
+        echo 'Replace cancelled'
+        return
+    endif
+
+    let l:search = s:EscapeLiteralSearch(l:selection)
+    let l:replace = s:EscapeLiteralReplacement(l:replacement)
+    execute '%s/\V' . l:search . '/' . l:replace . '/g'
+endfunction
+
+function! s:EscapeLiteralSearch(text) abort
+    let l:text = escape(a:text, '\/')
+    return substitute(l:text, "\n", '\\n', 'g')
+endfunction
+
+function! s:EscapeLiteralReplacement(text) abort
+    let l:text = escape(a:text, '/\&')
+    return substitute(l:text, "\n", '\\r', 'g')
 endfunction
 
 function! s:FoldText() abort
