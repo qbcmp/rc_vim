@@ -58,9 +58,9 @@ set fillchars=eob:\
 set fillchars=fold:\
 set fillchars+=vert:┃
 autocmd FileType netrw highlight CursorLine ctermfg=white ctermbg=238
-autocmd FileType netrw setlocal laststatus=0 noruler noshowmode
+autocmd FileType netrw setlocal noruler noshowmode
+autocmd FileType netrw let &l:statusline = '%{exists("b:netrw_curdir") ? fnamemodify(b:netrw_curdir, ":~") : ""}'
 hi netrwTreeBar ctermfg=black
-autocmd FileType netrw setlocal statusline=[%n]\ %<%F\ %m%r%w&y %=\ (%l,%c)\ %P\ of\ %L
 
 let g:netrw_keepdir = 0
 let g:netrw_winsize = 30
