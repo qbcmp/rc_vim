@@ -40,8 +40,8 @@ map <leader>h :sp<CR>
 map <silent> <C-L> :set hlsearch!<CR>
 map <silent> <S-L> :set list!<CR>
 map <silent> <C-N> :set number!<CR>
-map <leader>+ :vertical resize -5<CR>
-map <leader>- :vertical resize +5<CR>
+map <leader>+ :vertical resize +5<CR>
+map <leader>- :vertical resize -5<CR>
 map <leader>c :set clipboard="unnamed"<CR>
 map <leader>t :tabnew<CR>
 map <leader>e :Lexplore<CR>
